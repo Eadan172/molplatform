@@ -1,0 +1,70 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Virtual environments
+venv/
+env/
+ENV/
+.venv/
+.python-version
+
+# Build artifacts
+build/
+dist/
+*.egg-info/
+*.egg
+*.spec
+
+# IDE / Editors
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS-specific
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Project-specific — 数据库和临时文件
+*.db
+*.sqlite
+*.sqlite3
+app/data/molplatform.db
+
+# 日志
+*.log
+logs/
+
+# API Keys / Secrets
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+
+# Trajectory / MD 临时文件
+*.xtc
+*.trr
+*.gro
+*.tpr
+*.edr
+*.top
+*.itp
+*.pdbqt
+
+# 对接临时文件
+*.pdb
+*.sdf
+*.mol2
+
+# Pycache 编译文件
+*.cpython-*.pyc
+
+# 临时调试脚本
+_debug*.py

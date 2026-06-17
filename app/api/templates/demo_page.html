@@ -1,0 +1,410 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+  <meta http-equiv="Pragma" content="no-cache" />
+  <meta http-equiv="Expires" content="0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MolPlatform · COX-2 (1CX2) 虚拟筛选 & MD 模拟演示</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/marked@11.1.1/marked.min.js"></script>
+  <style>
+    body {
+      background: linear-gradient(135deg, #f0f8f4 0%, #ffffff 55%, #e6f4ed 100%);
+      font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+      min-height: 100vh;
+    }
+    .hero {
+      background: linear-gradient(135deg, #0f5132 0%, #198754 100%);
+      color: #fff;
+      border-radius: 14px;
+      padding: 32px 28px;
+      margin: 18px 0;
+      box-shadow: 0 6px 18px rgba(15, 81, 50, 0.25);
+    }
+    .hero h1 { font-size: 2.1rem; margin: 0 0 8px; }
+    .hero p { margin: 4px 0; opacity: 0.95; }
+    .card { border: 1px solid #dee2e6; border-radius: 12px; box-shadow: 0 2px 6px rgba(0,0,0,0.05); margin-bottom: 18px; }
+    .card-header { font-weight: 600; background: #f8fff9; border-bottom: 1px solid #d1e7dd; color: #0f5132; }
+    .stage-badge { display: inline-flex; align-items: center; gap: 6px; padding: 6px 14px; border-radius: 20px; background: #f1f3f5; color: #555; font-size: 0.85rem; margin: 4px 4px 4px 0; transition: all 0.3s ease; }
+    .stage-badge.active { background: #198754; color: #fff; transform: scale(1.03); }
+    .stage-badge.done { background: #0dcaf0; color: #fff; }
+    .run-btn {
+      padding: 14px 28px; font-size: 1.1rem; font-weight: 600;
+      background: linear-gradient(135deg, #198754 0%, #0f5132 100%);
+      border: none; border-radius: 10px; color: #fff;
+      transition: all 0.2s ease; box-shadow: 0 4px 12px rgba(25, 135, 84, 0.3);
+    }
+    .run-btn:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 6px 18px rgba(25, 135, 84, 0.4); }
+    .run-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+    .spin { animation: spin 1s linear infinite; display: inline-block; margin-right: 6px; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    table th { background: #0f5132 !important; color: #fff !important; }
+    table tbody tr:nth-child(odd) { background: #f8fff9; }
+    .highlight { background: #fff3cd !important; font-weight: 600; }
+    .top-hit { background: #d1e7dd !important; font-weight: 700; }
+    .chart-box { background: #fff; padding: 12px; border-radius: 10px; border: 1px solid #dfe6e0; }
+    .pipeline-icon { font-size: 1.3rem; color: #198754; }
+    .report-panel { background: #fff; border: 1px solid #dfe6e0; border-radius: 10px; padding: 18px; }
+    .report-panel h1, .report-panel h2, .report-panel h3 { color: #0f5132; }
+    .report-panel h1 { font-size: 1.5rem; border-bottom: 2px solid #198754; padding-bottom: 6px; }
+    .report-panel h2 { font-size: 1.2rem; margin-top: 18px; }
+    .report-panel code { background: #f3f4f6; padding: 2px 6px; border-radius: 4px; }
+    .report-panel table { border-collapse: collapse; margin: 10px 0; width: 100%; }
+    .report-panel th, .report-panel td { border: 1px solid #dee2e6; padding: 6px 10px; font-size: 0.9rem; }
+    .footer { text-align: center; color: #6c757d; padding: 20px 0; font-size: 0.85rem; }
+    .mol-tag { display: inline-block; padding: 2px 8px; background: #e9ecef; color: #495057; border-radius: 12px; font-size: 0.75rem; margin: 2px; }
+    .nav-link-custom { color: #fff !important; text-decoration: none; padding: 6px 14px; border-radius: 6px; margin-left: 8px; border: 1px solid rgba(255,255,255,0.4); }
+    .nav-link-custom:hover { background: rgba(255,255,255,0.15); }
+  </style>
+</head>
+<body>
+<div class="container">
+
+  <!-- Hero 区域 -->
+  <div class="hero">
+    <div class="d-flex justify-content-between align-items-center flex-wrap">
+      <div>
+        <h1><i class="bi bi-diagram-3"></i> MolPlatform · 高通量分子筛选 & 动力学模拟平台</h1>
+        <p><i class="bi bi-box-arrow-in-down-right"></i> <strong>演示场景：</strong> 10 个 COX-2 配体对 PDB <strong>1CX2</strong> 的虚拟筛选 + Top-hit 100 ns NPT MD 模拟</p>
+        <p><i class="bi bi-tools"></i> <strong>技术栈：</strong> FastAPI · AutoDock Vina · GROMACS · Chart.js</p>
+      </div>
+      <div>
+        <a href="/docs" class="nav-link-custom"><i class="bi bi-filetype-json"></i> API 文档</a>
+        <a href="/redoc" class="nav-link-custom"><i class="bi bi-file-earmark-code"></i> ReDoc</a>
+        <a href="/api/v1/demo/report" class="nav-link-custom"><i class="bi bi-file-earmark-text"></i> 报告页面</a>
+      </div>
+    </div>
+  </div>
+
+  <!-- 一键运行按钮 + 阶段进度 -->
+  <div class="card">
+    <div class="card-header"><i class="bi bi-play-circle"></i> 一键演示</div>
+    <div class="card-body text-center">
+      <p class="mb-3 text-muted">点击下方按钮执行完整管线：加载 10 个配体 → AutoDock Vina 对接 → 100 ns MD → 报告生成</p>
+      <button id="runBtn" class="run-btn" onclick="runDemo()">
+        <i class="bi bi-rocket-takeoff-fill"></i> 运行完整演示
+      </button>
+      <div id="stages" class="mt-4">
+        <span class="stage-badge" data-stage="1"><i class="bi bi-box"></i> 1 · 分子库加载</span>
+        <span class="stage-badge" data-stage="2"><i class="bi bi-magic"></i> 2 · 分子对接</span>
+        <span class="stage-badge" data-stage="3"><i class="bi bi-graph-up"></i> 3 · MD 模拟</span>
+        <span class="stage-badge" data-stage="4"><i class="bi bi-journal-text"></i> 4 · 生成报告</span>
+      </div>
+      <div id="status" class="mt-2 text-muted small"></div>
+    </div>
+  </div>
+
+  <!-- 靶标信息 -->
+  <div class="card">
+    <div class="card-header"><i class="bi bi-bullseye"></i> 靶标信息 — Cyclooxygenase-2 (COX-2) · PDB 1CX2</div>
+    <div class="card-body">
+      <div id="receptorInfo" class="small text-muted">点击"运行完整演示"加载数据...</div>
+    </div>
+  </div>
+
+  <!-- 分子库 -->
+  <div class="card">
+    <div class="card-header"><i class="bi bi-motherboard"></i> 配体库 — 10 个 COX-2 抑制剂</div>
+    <div class="card-body">
+      <div class="table-responsive">
+        <table class="table table-sm table-hover">
+          <thead>
+            <tr><th>#</th><th>化合物</th><th>类别</th><th>SMILES</th><th>MW</th><th>logP</th><th>H-BD</th><th>H-BA</th><th>TPSA</th><th>Ro5</th><th>备注</th></tr>
+          </thead>
+          <tbody id="ligandTable"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- 对接结果 -->
+  <div class="card">
+    <div class="card-header"><i class="bi bi-bounding-box-circles"></i> 分子对接结果 (AutoDock Vina)</div>
+    <div class="card-body">
+      <div id="dockingSummary" class="mb-3"></div>
+      <div class="table-responsive">
+        <table class="table table-sm table-hover">
+          <thead>
+            <tr><th>排名</th><th>化合物</th><th>类别</th><th>ΔG (kcal/mol)</th><th>RMSD (Å)</th><th>H-键数</th><th>关键残基</th><th>置信度</th></tr>
+          </thead>
+          <tbody id="dockingTable"></tbody>
+        </table>
+      </div>
+      <div class="row mt-4">
+        <div class="col-md-6">
+          <div class="chart-box"><canvas id="dockingChart"></canvas></div>
+          <p class="text-center small mt-2 text-muted">结合能排名（越低越强）</p>
+        </div>
+        <div class="col-md-6">
+          <div class="chart-box"><canvas id="categoryChart"></canvas></div>
+          <p class="text-center small mt-2 text-muted">类别平均结合能对比</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MD 模拟 -->
+  <div class="card">
+    <div class="card-header"><i class="bi bi-diagram-2"></i> 分子动力学模拟 — Top-hit 100 ns NPT</div>
+    <div class="card-body">
+      <div id="mdSummary" class="mb-3"></div>
+      <div class="row mt-2">
+        <div class="col-md-6">
+          <div class="chart-box"><canvas id="rmsdChart"></canvas></div>
+          <p class="text-center small mt-2 text-muted">RMSD 时间序列（Cα）</p>
+        </div>
+        <div class="col-md-6">
+          <div class="chart-box"><canvas id="rmsfChart"></canvas></div>
+          <p class="text-center small mt-2 text-muted">RMSF 每残基柔性</p>
+        </div>
+      </div>
+      <div class="row mt-4">
+        <div class="col-md-6">
+          <div class="chart-box"><canvas id="hbondChart"></canvas></div>
+          <p class="text-center small mt-2 text-muted">配体-蛋白氢键数</p>
+        </div>
+        <div class="col-md-6">
+          <div class="chart-box"><canvas id="energyChart"></canvas></div>
+          <p class="text-center small mt-2 text-muted">势能时间序列</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 报告 -->
+  <div class="card">
+    <div class="card-header"><i class="bi bi-journal-richtext"></i> 分析报告</div>
+    <div class="card-body">
+      <div id="reportPanel" class="report-panel">
+        <p class="text-muted">点击"运行完整演示"查看完整报告...</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="footer">
+    © MolPlatform · 百万级分子高通量数据架构与自动化处理平台 · Demo 版本
+  </div>
+</div>
+
+<script>
+let charts = {};
+
+async function runDemo() {
+  const btn = document.getElementById("runBtn");
+  const status = document.getElementById("status");
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spin"><i class="bi bi-arrow-repeat"></i></span> 正在运行...';
+
+  document.querySelectorAll(".stage-badge").forEach(b => b.classList.remove("active", "done"));
+
+  try {
+    setStage(1, "加载 10 个 COX-2 配体库...");
+    const summary = await fetchJson("/api/v1/demo/summary");
+    renderLigandTable(summary.ligand_library.ligands);
+    renderReceptorInfo(summary.receptor);
+    setStageDone(1, "✔ 分子库加载完成");
+
+    setStage(2, "运行 AutoDock Vina 对接...");
+    const full = await fetchJson("/api/v1/demo/run", "POST");
+    setStageDone(2, "✔ 分子对接完成");
+
+    setStage(3, "分析 100 ns NPT MD 轨迹...");
+    setStageDone(3, "✔ MD 模拟完成");
+
+    setStage(4, "生成分析报告...");
+    renderDocking(full.docking);
+    renderMD(full.md);
+    renderReport(full.report);
+    setStageDone(4, "✔ 演示完成 · 总耗时 " + full.elapsed_sec + " s");
+
+    status.innerHTML = '<span class="text-success"><i class="bi bi-check-circle-fill"></i> 演示执行成功！' +
+      '最佳命中：<strong>' + full.best_hit.molecule_name + '</strong> (ΔG = ' + full.best_hit.binding_energy + ' kcal/mol)，' +
+      'RMSD 平台期：' + full.md.rmsd.plateau_mean_angstrom + ' ± ' + full.md.rmsd.plateau_std_angstrom + ' Å</span>';
+
+    btn.innerHTML = '<i class="bi bi-arrow-repeat"></i> 重新运行演示';
+    btn.disabled = false;
+  } catch (err) {
+    status.innerHTML = '<span class="text-danger"><i class="bi bi-x-circle-fill"></i> 执行失败：' + err.message + '</span>';
+    btn.innerHTML = '<i class="bi bi-rocket-takeoff-fill"></i> 运行完整演示';
+    btn.disabled = false;
+  }
+}
+
+function setStage(n, msg) {
+  const el = document.querySelector('.stage-badge[data-stage="' + n + '"]');
+  if (el) el.classList.add("active");
+  document.getElementById("status").textContent = msg;
+}
+function setStageDone(n, msg) {
+  const el = document.querySelector('.stage-badge[data-stage="' + n + '"]');
+  if (el) { el.classList.remove("active"); el.classList.add("done"); }
+  document.getElementById("status").textContent = msg;
+}
+
+async function fetchJson(url, method) {
+  method = method || "GET";
+  const opts = { method: method };
+  if (method === "POST") {
+    opts.headers = { "Content-Type": "application/json" };
+    opts.body = JSON.stringify({});
+  }
+  const res = await fetch(url, opts);
+  if (!res.ok) throw new Error("HTTP " + res.status);
+  return await res.json();
+}
+
+function renderReceptorInfo(rec) {
+  const box = rec.binding_site;
+  const ds = rec.docking_settings;
+  const ms = rec.md_settings;
+  document.getElementById("receptorInfo").innerHTML =
+    '<p><strong>靶标名称：</strong>' + rec.name + '</p>' +
+    '<p><strong>来源生物：</strong>' + rec.organism + '</p>' +
+    '<p><strong>分辨率：</strong>' + rec.resolution_angstrom + ' Å · <strong>发表：</strong>' + rec.publication + '</p>' +
+    '<p><strong>结合口袋中心：</strong>(' + box.center_xyz[0] + ', ' + box.center_xyz[1] + ', ' + box.center_xyz[2] + ') Å · <strong>盒尺寸：</strong>' + box.box_size_angstrom + ' Å</p>' +
+    '<p><strong>关键残基：</strong>' + box.key_residues.map(function(r){return '<span class="mol-tag">' + r + '</span>';}).join('') + '</p>' +
+    '<p><strong>对接软件：</strong>' + ds.software + ' · exhaustiveness=' + ds.exhaustiveness + ' · ' + ds.n_cpu + ' CPU</p>' +
+    '<p><strong>MD 引擎：</strong>' + ms.engine + ' · ' + ms.forcefield + ' / ' + ms.water_model + ' · ' + ms.sim_time_ns + ' ns</p>';
+}
+
+function renderLigandTable(ligands) {
+  const tbody = document.getElementById("ligandTable");
+  tbody.innerHTML = ligands.map(function(m, i){
+    return '<tr>' +
+    '<td>' + (i+1) + '</td>' +
+    '<td><strong>' + m.name + '</strong></td>' +
+    '<td>' + m.category + '</td>' +
+    '<td style="font-family: monospace; font-size: 0.7rem; max-width: 240px; overflow: hidden; text-overflow: ellipsis;">' + m.smiles + '</td>' +
+    '<td>' + m.mol_weight + '</td>' +
+    '<td>' + m.logp + '</td>' +
+    '<td>' + m.hbd + '</td>' +
+    '<td>' + m.hba + '</td>' +
+    '<td>' + m.tpsa + '</td>' +
+    '<td>' + (m.ro5_pass ? '✔' : '✘') + '</td>' +
+    '<td class="small">' + m.notes + '</td>' +
+    '</tr>';
+  }).join("");
+}
+
+function renderDocking(dock) {
+  const tbody = document.getElementById("dockingTable");
+  tbody.innerHTML = dock.results.map(function(r){
+    let cls = '';
+    if (r.rank <= 3) cls = 'top-hit';
+    else if (r.binding_energy < -8.0) cls = 'highlight';
+    return '<tr class="' + cls + '">' +
+    '<td><strong>' + r.rank + '</strong></td>' +
+    '<td>' + r.molecule_name + '</td>' +
+    '<td>' + r.category + '</td>' +
+    '<td>' + r.binding_energy + '</td>' +
+    '<td>' + r.rmsd_ub + '</td>' +
+    '<td>' + r.n_hbonds + '</td>' +
+    '<td class="small">' + r.hbond_with.join(", ") + '</td>' +
+    '<td>' + r.pose_confidence + '</td>' +
+    '</tr>';
+  }).join("");
+
+  const a = dock.analysis;
+  document.getElementById("dockingSummary").innerHTML =
+    '<div class="d-flex flex-wrap gap-2">' +
+    '<span class="mol-tag" style="background:#d1e7dd;">最佳命中：' + dock.results[0].molecule_name + ' (' + a.best_energy + ' kcal/mol)</span>' +
+    '<span class="mol-tag" style="background:#fff3cd;">ΔG < −8: ' + a.below_minus8 + '/' + dock.results.length + '</span>' +
+    '<span class="mol-tag" style="background:#f8d7da;">ΔG < −9: ' + a.below_minus9 + '/' + dock.results.length + '</span>' +
+    '<span class="mol-tag">平均：' + a.mean_energy + ' · 中位：' + a.median_energy + '</span>' +
+    '<span class="mol-tag">Coxib 平均：' + a.coxib_average + '</span>' +
+    '<span class="mol-tag">NSAID 平均：' + a.nsaid_average + '</span>' +
+    '</div>';
+
+  const labels = dock.results.map(function(r){return r.molecule_name;});
+  const energies = dock.results.map(function(r){return r.binding_energy;});
+  drawBar("dockingChart", labels, energies, "结合能 (kcal/mol)", "rgba(25,135,84,0.75)", "分子对接结合能排名");
+
+  const cats = {};
+  dock.results.forEach(function(r){
+    if (!cats[r.category]) cats[r.category] = { sum: 0, n: 0 };
+    cats[r.category].sum += r.binding_energy;
+    cats[r.category].n += 1;
+  });
+  const catLabels = Object.keys(cats);
+  const catVals = catLabels.map(function(c){return +(cats[c].sum / cats[c].n).toFixed(2);});
+  drawBar("categoryChart", catLabels, catVals, "平均结合能 (kcal/mol)", "rgba(13,110,253,0.75)", "不同类别化合物平均结合能");
+}
+
+function renderMD(md) {
+  const s = md.simulation;
+  const r = md.rmsd;
+  const f = md.rmsf;
+  const h = md.hbonds;
+  document.getElementById("mdSummary").innerHTML =
+    '<div class="d-flex flex-wrap gap-2">' +
+    '<span class="mol-tag">引擎：' + s.engine + '</span>' +
+    '<span class="mol-tag">力场：' + s.forcefield + '</span>' +
+    '<span class="mol-tag">水模型：' + s.water_model + '</span>' +
+    '<span class="mol-tag">时长：' + s.sim_time_ns + ' ns · ' + s.timestep_fs + ' fs</span>' +
+    '<span class="mol-tag" style="background:#d1e7dd;">平台期 RMSD：' + r.plateau_mean_angstrom + ' ± ' + r.plateau_std_angstrom + ' Å</span>' +
+    '<span class="mol-tag">平衡时间：' + r.equilibration_time_ns + ' ns</span>' +
+    '<span class="mol-tag">平均 H 键：' + h.mean_count + '</span>' +
+    '<span class="mol-tag">MM/PBSA ΔG：' + md.energies.mm_pbsa_delta_g_kcal + ' kcal/mol</span>' +
+    '<span class="mol-tag" style="background:#fff3cd;">稳定：' + (md.stability.is_stable ? '✔' : '✘') + '</span>' +
+    '</div>';
+
+  const rmsdTimes = r.series.map(function(x){return x.time_ns;});
+  const rmsdVals = r.series.map(function(x){return x.rmsd_angstrom;});
+  drawLine("rmsdChart", rmsdTimes, rmsdVals, "时间 (ns)", "RMSD (Å)", "RMSD 时间序列", "rgba(13,110,253,0.9)");
+
+  const residues = f.per_residue.map(function(x){return x.residue;});
+  const rmsfVals = f.per_residue.map(function(x){return x.rmsf_angstrom;});
+  drawBar("rmsfChart", residues, rmsfVals, "RMSF (Å)", "rgba(220,53,69,0.7)", "每残基 RMSF");
+
+  const hTimes = h.series.map(function(x){return x.time_ns;});
+  const hCounts = h.series.map(function(x){return x.count;});
+  drawLine("hbondChart", hTimes, hCounts, "时间 (ns)", "H-键数量", "配体-蛋白 H 键", "rgba(255,193,7,0.9)");
+
+  const pot = md.energies.potential_series_kjmol;
+  const potTimes = pot.map(function(x){return x.time_ns;});
+  const potVals = pot.map(function(x){return x.energy_kjmol / 1000;});
+  drawLine("energyChart", potTimes, potVals, "时间 (ns)", "势能 (MJ/mol)", "势能时间序列", "rgba(111,66,193,0.85)");
+}
+
+function renderReport(report) {
+  let content = report.summary_markdown || report.summary_text || "";
+  document.getElementById("reportPanel").innerHTML = marked.parse(content);
+}
+
+function destroyChart(id) {
+  if (charts[id]) { charts[id].destroy(); delete charts[id]; }
+}
+function drawBar(id, labels, data, label, color, title) {
+  destroyChart(id);
+  const ctx = document.getElementById(id).getContext("2d");
+  charts[id] = new Chart(ctx, {
+    type: "bar",
+    data: { labels: labels, datasets: [{ label: label, data: data, backgroundColor: color, borderColor: color, borderWidth: 1 }] },
+    options: {
+      responsive: true,
+      plugins: { legend: { display: false }, title: { display: true, text: title, color: "#0f5132", font: { weight: "bold" } } },
+      scales: { y: { title: { display: true, text: label }, grid: { color: "#eee" } }, x: { ticks: { maxRotation: 45, minRotation: 30 } } }
+    }
+  });
+}
+function drawLine(id, labels, data, xLabel, yLabel, title, color) {
+  destroyChart(id);
+  const ctx = document.getElementById(id).getContext("2d");
+  const fillColor = color.replace("0.9", "0.25").replace("0.85", "0.25");
+  charts[id] = new Chart(ctx, {
+    type: "line",
+    data: { labels: labels, datasets: [{ label: yLabel, data: data, borderColor: color, backgroundColor: fillColor, borderWidth: 2, tension: 0.25, fill: true, pointRadius: 0, pointHoverRadius: 5 }] },
+    options: {
+      responsive: true,
+      plugins: { legend: { display: false }, title: { display: true, text: title, color: "#0f5132", font: { weight: "bold" } } },
+      scales: { y: { title: { display: true, text: yLabel }, grid: { color: "#eee" } }, x: { title: { display: true, text: xLabel }, ticks: { maxTicksLimit: 12 } } }
+    }
+  });
+}
+</script>
+</body>
+</html>
