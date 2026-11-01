@@ -41,6 +41,15 @@ MolPlatform/
 
 ---
 
+## MoleCode 结构层
+
+[MoleCode](https://github.com/AtomFlow-AI/MoleCode)（`molecode`，MIT）是 agent / AI 路径上的结构表示层，不替换对接、MD、HTVS 或 Scale worker。
+
+- Python：`app/services/molecode_service.py` 提供 `smiles_to_mermaid`、`mermaid_to_mol`、`mermaid_to_smiles`。无效图会抛出 `MoleCodeStructureError`（未知原子、悬空键、RDKit 价态失败）。
+- Agent 工具：`POST /api/v1/agent/tools/molecode`，动作 `smiles_to_mermaid`、`mermaid_to_smiles`、`validate`。自然语言里出现 MoleCode / Mermaid / 结构图时，`/api/v1/agent/tasks` 会调用同一工具。
+- 对话：`POST /api/v1/ai/chat` 在上下文带有 `smiles` 或 MoleCode 图时，会先做 RDKit 校验，再把结果交给模型。
+- 转换本身不需要 LLM。若要用 `molecode.llm` 做可选的图编辑，沿用 `.env` 里的 `LLM_PROVIDER`、`LLM_BASE_URL`、`LLM_API_KEY`、`LLM_MODEL`（`LLM_PROVIDER=none` 时不创建客户端）。不要把真实密钥写入仓库。说明见 `integrations/molecode/SKILL.md`。
+
 ## 快速启动
 
 ```bash

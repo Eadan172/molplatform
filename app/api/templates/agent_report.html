@@ -11,7 +11,7 @@
 <section class="hero"><h1>MolPlatform · 自然语言分子分析</h1><p>描述你想分析什么，系统将生成可追踪的任务计划和可视化报告。</p></section>
 <section class="card"><h2>1. 描述分析需求</h2><textarea id="prompt" placeholder="例如：分析平台中的分子，筛选类药五原则通过的候选物，按综合基础性质排序，展示 Top 5 并生成图表报告。">分析平台中的分子，筛选类药五原则通过的候选物，按综合基础性质排序，展示 Top 5 并生成图表报告。</textarea>
 <div class="form-row" style="align-items:center;margin-top:12px"><label>最多展示 <input id="topN" type="number" min="1" max="100" value="5"> 个候选物</label><button id="runBtn" onclick="submitTask()">生成可视化报告</button><button class="secondary" onclick="loadReports()">查看历史报告</button><button class="secondary" onclick="addRo5Fixture()">添加 Ro5 反例（测试）</button></div><p class="hint">“添加 Ro5 反例”仅用于本地测试，会向分子库添加一条明确标记的测试数据。</p>
-<p class="hint">MVP 当前支持：读取分子库、结构基础检查、按已有性质筛选/排序、生成报告。对接、MD 和 ADMET 暂不执行真实计算。</p><div id="status" class="status">等待提交任务。</div><div id="plan" class="hidden"></div></section>
+<p class="hint">MVP 当前支持：读取分子库、结构基础检查、MoleCode 结构图（SMILES ↔ Mermaid，RDKit 校验）、按已有性质筛选/排序、生成报告。对接、MD、HTVS 和 ADMET 仍由原有模块处理，结构工具不执行这些计算。</p><div id="status" class="status">等待提交任务。</div><div id="plan" class="hidden"></div></section>
 <section id="historyCard" class="card hidden"><h2>历史报告</h2><div id="history"></div></section>
 <section id="report" class="hidden">
 <div class="card"><h2 id="reportTitle">分析报告</h2><div id="summary" class="grid"></div><p id="summaryText"></p><div class="form-row"><a id="openJson" class="linkbtn secondary" target="_blank">查看 JSON</a><a id="downloadJson" class="linkbtn secondary">导出 JSON</a></div></div>

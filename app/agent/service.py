@@ -141,6 +141,9 @@ def run_task(task_id: str) -> None:
         if not task or task["status"] in ("cancelled", "needs_tool"):
             return
         plan = task["plan"]
+        if plan.get("operation") == "structure":
+            _run_structure_task(task_id, task["prompt"])
+            return
         _update_task(task_id, status="running", progress=10, message="正在读取分子库")
         molecules = _load_molecules(plan.get("molecule_ids", []))
         if plan.get("molecule_ids"):
@@ -250,4 +253,72 @@ def run_task(task_id: str) -> None:
         conn.close()
         _update_task(task_id, status="completed", progress=100, message="报告已生成", report_id=report_id)
     except Exception as exc:
-        _update_task(task_id, status="failed", progress=100, message="任务执行失败", error=str(exc))
+        message = str(exc)
+        code = getattr(exc, "code", None)
+        if code:
+            message = f"{code}: {message}"
+        _update_task(task_id, status="failed", progress=100, message="任务执行失败", error=message)
+
+
+def _run_structure_task(task_id: str, prompt: str) -> None:
+    """Convert or validate one structure with MoleCode. Does not touch docking or MD."""
+    from app.services.molecode_service import interpret_structure_prompt
+
+    _update_task(task_id, status="running", progress=30, message="正在用 MoleCode 转换结构并做 RDKit 校验")
+    result = interpret_structure_prompt(prompt)
+    report_id = "report_" + uuid.uuid4().hex[:12]
+    canonical = result["canonical_smiles"]
+    title = "MoleCode 结构转换"
+    report = {
+        "schema_version": "1.0",
+        "title": title,
+        "summary": {
+            "input_count": 1,
+            "valid_count": 1,
+            "invalid_count": 0,
+            "filtered_count": 1,
+            "ranked_count": 1,
+            "text": f"MoleCode 已将结构转换为 RDKit 校验通过的分子，规范 SMILES：{canonical}。该结果只描述结构，不包含对接、MD 或虚拟筛选。",
+        },
+        "filters": {},
+        "filter_diagnostics": {},
+        "ranking_method": "MoleCode 确定性转换，并用 RDKit SanitizeMol 校验；不是结合亲和力或成药性预测。",
+        "data_quality": {
+            "property_source": "未读取分子库性质字段；本任务只做结构转换与校验。",
+            "validation_modes": ["rdkit"],
+            "validation_note": "SMILES 与 MoleCode Mermaid 图经 RDKit 解析并完成 Sanitize。未通过校验的图会返回错误，不会被当成有效结构。",
+            "calculation_mode": "molecode_rdkit_structure",
+            "real_docking_performed": False,
+            "real_md_performed": False,
+            "warnings": ["该结果只描述化学结构，不包含对接、分子动力学或高通量虚拟筛选。"],
+            "filter_note": "本任务未对分子库做筛选。",
+        },
+        "charts": {"molecular_weight": [], "logp": [], "ro5_distribution": []},
+        "candidates": [{
+            "id": None,
+            "name": result.get("name") or "Molecule",
+            "smiles": canonical,
+            "mol_weight": None,
+            "logp": None,
+            "hbd": None,
+            "hba": None,
+            "tpsa": None,
+            "ro5_pass": None,
+            "cluster_id": None,
+            "source": "molecode",
+            "smiles_valid": True,
+            "validation_mode": "rdkit",
+            "heuristic_score": None,
+        }],
+        "invalid_molecules": [],
+        "structure": result,
+        "provenance": {"task_id": task_id, "created_at": utc_now(), "tools": ["structure.molecode"]},
+    }
+    conn = get_db()
+    conn.execute(
+        "INSERT INTO agent_reports(report_id,task_id,title,status,report_json,created_at) VALUES(?,?,?,?,?,?)",
+        (report_id, task_id, title, "completed", json.dumps(report, ensure_ascii=False), utc_now()),
+    )
+    conn.commit()
+    conn.close()
+    _update_task(task_id, status="completed", progress=100, message="结构校验完成", report_id=report_id)

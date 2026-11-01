@@ -3,6 +3,8 @@
 本版本以 `molplatform-v5.2` 为基础，保留原有 `/api/v1` 演示 API，新增一个应当用于真实工具实验的 `/api/v2` 工作台。它将自然语言请求解析为白名单工作流，上传的分子文件分块后由 Celery worker 执行，计算结果、报告、日志和结构文件保存在服务端。笔记本只需通过浏览器访问服务地址。
 
 > **科学性边界：** `/api/v2` 只在真实命令退出成功并产生对应结果文件时才报告成功。`/api/v1/docking`、`/api/v1/md` 和 `/api/v1/pipeline` 来自原型代码，其中部分服务是演示实现；不要把它们的输出当作文献级真实计算。该项目不会自动推导缺失的实验参数，也不会编造 ADMET 或结合能。
+>
+> **MoleCode：** `molecode`（MIT）只挂在 agent / AI 路径上，用来做 SMILES ↔ Mermaid 结构图转换，并用 RDKit 校验编辑结果。它不替换本文件描述的 Vina 对接、GROMACS MD 或性质筛选 worker。可选的 `molecode.llm` 复用 `.env` 中的 `LLM_*` 变量；结构转换本身不调用模型。
 
 ## 当前 MVP 功能
 

@@ -3,6 +3,15 @@ from typing import Any, Optional, Literal
 from pydantic import BaseModel, Field
 
 
+class MoleCodeToolRequest(BaseModel):
+    """Call the structure.molecode tool. Conversion does not run docking or MD."""
+
+    action: Literal["smiles_to_mermaid", "mermaid_to_smiles", "validate"]
+    smiles: Optional[str] = None
+    mermaid: Optional[str] = None
+    name: str = Field(default="Molecule", max_length=80)
+
+
 class AgentTaskRequest(BaseModel):
     prompt: str = Field(min_length=3, max_length=4000)
     molecule_ids: list[int] = Field(default_factory=list, max_length=5000)

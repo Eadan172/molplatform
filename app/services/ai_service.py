@@ -173,12 +173,32 @@ async def chat_with_expert(
     if context:
         ctx_str = f"\n当前项目上下文：\n{json.dumps(context, ensure_ascii=False, indent=2)}\n"
 
-    prompt = f"{ctx_str}\n用户问题：{user_question}"
+    structure = None
+    extra = ""
+    system = SYSTEM_COMP_CHEM
+    try:
+        from app.services.molecode_service import structure_context_for_discussion
 
-    result = await call_claude(prompt, system=SYSTEM_COMP_CHEM, max_tokens=800)
+        structure = structure_context_for_discussion(user_question, context)
+    except ImportError:
+        structure = None
+    if structure:
+        extra = (
+            "\nMoleCode 结构校验（RDKit，不是对接或 MD 结果）：\n"
+            + json.dumps(structure, ensure_ascii=False)
+        )
+        system += (
+            "\n若上文包含 MoleCode 结构校验，以该校验为准；校验失败时不要把图当成有效分子，"
+            "也不要据此改写对接或 MD 结论。"
+        )
+
+    prompt = f"{ctx_str}{extra}\n用户问题：{user_question}"
+
+    result = await call_claude(prompt, system=system, max_tokens=800)
     return {
         "question": user_question,
         "answer": result.get("content", ""),
         "model": CLAUDE_MODEL,
         "has_context": bool(context),
+        "structure": structure,
     }

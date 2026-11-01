@@ -12,6 +12,7 @@ UNSUPPORTED_HINTS = {
     "md": ("分子动力学", "模拟轨迹", "md simulation", "molecular dynamics"),
     "admet": ("admet", "毒性预测", "药代动力学"),
 }
+STRUCTURE_HINTS = ("molecode", "mermaid", "结构图", "分子图", "编辑结构", "结构编辑", "结构校验")
 
 
 def parse_request(prompt: str, default_top_n: int = 10) -> dict[str, Any]:
@@ -25,6 +26,8 @@ def parse_request(prompt: str, default_top_n: int = 10) -> dict[str, Any]:
     max_mw = float(mw_match.group(1)) if mw_match else None
     logp_match = re.search(r"(?:logp|log\s*p)\s*(?:小于|低于|<|under|below)\s*(-?\d+(?:\.\d+)?)", lowered)
     max_logp = float(logp_match.group(1)) if logp_match else None
+    goal = "分子性质汇总与候选物筛选报告"
+    operation = None
     if unsupported:
         supported = False
         reason = {
@@ -33,6 +36,12 @@ def parse_request(prompt: str, default_top_n: int = 10) -> dict[str, Any]:
             "admet": "当前 MVP 尚未接入可验证的 ADMET 计算工具。",
         }[unsupported[0]]
         steps = [{"id": "validate_request", "tool": "request.validate", "status": "planned"}]
+    elif any(hint in lowered for hint in STRUCTURE_HINTS):
+        supported = True
+        reason = None
+        operation = "structure"
+        goal = "MoleCode 结构图转换与 RDKit 校验"
+        steps = [{"id": "convert_or_validate", "tool": "structure.molecode", "status": "planned"}]
     else:
         supported = True
         reason = None
@@ -42,8 +51,8 @@ def parse_request(prompt: str, default_top_n: int = 10) -> dict[str, Any]:
             {"id": "rank_candidates", "tool": "molecule.rank", "status": "planned"},
             {"id": "generate_report", "tool": "report.generate", "status": "planned"},
         ]
-    return {
-        "goal": "分子性质汇总与候选物筛选报告",
+    plan = {
+        "goal": goal,
         "supported": supported,
         "unsupported_operations": unsupported,
         "reason": reason,
@@ -51,3 +60,6 @@ def parse_request(prompt: str, default_top_n: int = 10) -> dict[str, Any]:
         "filters": {"ro5_only": ro5_only, "max_molecular_weight": max_mw, "max_logp": max_logp},
         "steps": steps,
     }
+    if operation:
+        plan["operation"] = operation
+    return plan

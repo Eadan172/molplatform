@@ -2,8 +2,9 @@
 from pathlib import Path
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import HTMLResponse
-from app.agent.schemas import AgentTaskRequest
+from app.agent.schemas import AgentTaskRequest, MoleCodeToolRequest
 from app.agent.service import create_task, get_task, get_report, list_reports
+from app.services.molecode_service import MoleCodeStructureError, llm_configured, run_structure_tool
 
 router = APIRouter()
 _TEMPLATE = Path(__file__).parent / "templates" / "agent_report.html"
@@ -22,13 +23,34 @@ def capabilities():
     return {
         "supported": [
             "读取已有分子库", "SMILES 基础检查（可选 RDKit）", "按 Ro5/分子量/LogP 筛选",
-            "透明启发式排名", "分阶段筛选计数", "HTML 可视化报告", "JSON 导出", "历史任务与报告查询"
+            "透明启发式排名", "分阶段筛选计数", "HTML 可视化报告", "JSON 导出", "历史任务与报告查询",
+            "MoleCode 结构图：SMILES ↔ Mermaid，并用 RDKit 校验编辑结果",
         ],
+        "structure_tool": {
+            "name": "structure.molecode",
+            "endpoint": "POST /api/v1/agent/tools/molecode",
+            "actions": ["smiles_to_mermaid", "mermaid_to_smiles", "validate"],
+            "llm_required": False,
+            "llm_configured": llm_configured(),
+            "note": "结构表示层。不执行对接、MD、HTVS 或 ADMET。",
+        },
         "not_integrated": ["MolClaw 外部 MCP 调用", "真实分子对接", "真实 MD", "ADMET 计算"],
         "llm_required": False,
         "natural_language_mode": "rule_based_mvp",
         "note": "排名和现有数据库性质仅用于演示软件工作流，不构成科研结论。"
     }
+
+
+@router.post("/tools/molecode", summary="MoleCode 结构转换与 RDKit 校验")
+def molecode_tool(body: MoleCodeToolRequest):
+    """Convert SMILES to a MoleCode graph, or validate a graph edit back to SMILES.
+
+    This tool does not launch docking, MD, or scale workers.
+    """
+    try:
+        return run_structure_tool(body.action, smiles=body.smiles, mermaid=body.mermaid, name=body.name)
+    except MoleCodeStructureError as exc:
+        raise HTTPException(status_code=400, detail={"code": exc.code, "message": str(exc)}) from exc
 
 
 @router.post("/tasks", summary="提交自然语言分子分析任务")

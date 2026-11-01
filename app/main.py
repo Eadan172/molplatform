@@ -32,6 +32,7 @@ app = FastAPI(
 - `/workbench` and `/api/v2`: natural-language task submission, real RDKit descriptors, real AutoDock Vina CLI and real GROMACS `mdrun` workers.
 - PostgreSQL + Redis/Celery distributed tasks; worker nodes must share `MOLPLATFORM_DATA_DIR` and have their own scientific toolchains.
 - MolClaw L1/L2/L3 skill documents are used as workflow guidance and precondition checks. Only installed and verified CLIs are executed.
+- MoleCode (`structure.molecode` on `/api/v1/agent/tools/molecode`) converts SMILES to Mermaid graphs and RDKit-validates graph edits for the agent/AI path. It does not run docking, MD, or HTVS.
 - The original `/api/v1` routes are retained for compatibility, but some legacy docking/MD/pipeline implementations are demonstrations. Do not cite their output as real scientific results.
 
 This MVP does not claim a measured million-molecule/day throughput. Benchmark on the actual server and GPU before making throughput commitments.

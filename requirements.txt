@@ -34,3 +34,7 @@ redis>=5.0,<7.0
 python-multipart>=0.0.9
 python-dotenv>=1.0,<2.0
 rdkit>=2023.9
+
+# LLM-native structure graphs (SMILES ↔ Mermaid). Depends on rdkit>=2022.9 and networkx.
+# The rdkit pin above already satisfies that range; do not add a second rdkit pin.
+molecode>=0.1.0,<0.2

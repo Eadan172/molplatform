@@ -15,6 +15,7 @@
 - 显示筛选前的 Ro5 分布，避免启用 Ro5 筛选后图表只显示 100% 通过而造成误解。
 - 保存任务状态、任务计划和报告；支持历史报告和 JSON 导出。
 - 不要求配置 LLM API Key，也能测试整个端到端流程。
+- MoleCode 结构层：`POST /api/v1/agent/tools/molecode` 在 SMILES 与 Mermaid 图之间转换，并用 RDKit 校验。请求里出现 MoleCode、Mermaid 或「结构图」时，自然语言任务会调用同一工具。它不执行对接、MD 或 HTVS。转换不需要 LLM；可选的 `molecode.llm` 复用 `LLM_PROVIDER` / `LLM_BASE_URL` / `LLM_API_KEY` / `LLM_MODEL`。
 
 ## 当前明确不包含的功能
 
