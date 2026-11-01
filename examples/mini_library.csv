@@ -1,0 +1,9 @@
+name,smiles
+Aspirin,CC(=O)OC1=CC=CC=C1C(O)=O
+Ibuprofen,CC(C)CC1=CC=C(C=C1)C(C)C(O)=O
+Naproxen,COC1=CC2=CC=CC=C2C=C1C(C)C(O)=O
+Caffeine,CN1C(=O)N(C)c2ncn(C)c2C1=O
+Acetaminophen,CC(=O)NC1=CC=C(O)C=C1
+Celecoxib,CC1=CC=C(C=C1)C1=CC(=NN1C1=CC=C(C=C1)S(N)(=O)=O)C(F)(F)F
+LongAlkane_Control,CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
+Invalid_Control,not_a_smiles

@@ -4,7 +4,7 @@
 
 工作流程：
   1. 生成 GROMACS 输入文件（.mdp）— 描述模拟参数
-  2. 通过 WSL 调用 gmx grompp（预处理）+ gmx mdrun（模拟）
+  2. 调用 GROMACS_BINARY（默认 PATH 上的 gmx）执行 grompp 与 mdrun
   3. 解析 .edr/.trr/.xtc 轨迹 → RMSD / RMSF / 氢键数
   4. 若真实模拟不可用，使用物理模型生成收敛轨迹
 
@@ -23,11 +23,21 @@ import tempfile
 from typing import Optional, Dict, List, Any
 
 # ======================================================================
-# 外部工具路径
+# 外部工具路径（与 .env.example / app.scale.config 一致）
 # ======================================================================
-GMX_CMD_PREFIX = "wsl -d Ubuntu-24.04 -u root -- bash -lc 'source /usr/local/gromacs/bin/GMXRC"
-GMX_CMD = GMX_CMD_PREFIX + " && gmx'"
-VINA_PATH = r"D:\anaconda\envs\vina\Library\bin\vina.exe"
+GROMACS_BINARY = os.getenv("GROMACS_BINARY", "gmx")
+
+
+def _resolve_executable(configured: str) -> Optional[str]:
+    """PATH lookup, or the given path when it is already an executable file."""
+    if not configured:
+        return None
+    found = shutil.which(configured)
+    if found:
+        return found
+    if os.path.isfile(configured):
+        return configured
+    return None
 
 
 # ======================================================================
@@ -387,7 +397,7 @@ def _compute_fes_2d(
 
 
 # ======================================================================
-# 真实 GROMACS 模拟（通过 WSL）
+# 真实 GROMACS 模拟（GROMACS_BINARY）
 # ======================================================================
 def _run_real_gromacs(
     sim_time_ns: float,
@@ -396,8 +406,12 @@ def _run_real_gromacs(
     n_atoms: int = 45000,
     timeout: int = 120,
 ) -> Optional[Dict[str, Any]]:
-    """通过 WSL 调用 GROMACS，执行：溶剂化（TIP3P）+ 预处理 + 短 MD 测试。
-    由于真实 100ns MD 需数小时，此函数验证 gmx 管道并生成可解析的输出。"""
+    """调用 GROMACS_BINARY（默认 gmx）执行溶剂化、grompp 和短 MD 探测。
+    真实 100ns MD 需数小时；此函数只验证本机 gmx 管道是否可用。"""
+    gmx = _resolve_executable(GROMACS_BINARY)
+    if not gmx:
+        return None
+
     workdir = tempfile.mkdtemp(prefix="gmx_")
     try:
         # --- Step 0: 写入输入文件 ---
@@ -414,34 +428,36 @@ def _run_real_gromacs(
         with open(solv_gro, "w", encoding="utf-8") as f:
             f.write(_generate_tip3p_solv_box(nm_box=2.5, seed=42))
 
-        win_drive = workdir[0].lower()
-        wsl_workdir = f"/mnt/{win_drive}" + workdir[2:].replace("\\", "/")
-
-        def _run(cmd: str) -> subprocess.CompletedProcess:
-            full = (
-                f"wsl -d Ubuntu-24.04 -u root -- bash -lc "
-                f"'source /etc/profile.d/gromacs.sh 2>/dev/null; "
-                f"source /usr/local/gromacs/bin/GMXRC; "
-                f"cd {wsl_workdir}; {cmd}'"
+        def _run(args: List[str]) -> subprocess.CompletedProcess:
+            return subprocess.run(
+                args, cwd=workdir, capture_output=True, text=True, timeout=timeout,
             )
-            return subprocess.run(full, shell=True, capture_output=True,
-                                  text=True, timeout=timeout)
 
-        # --- Step 1: 检查 GROMACS 可用性 + tip3p.gro ---
-        p_check = _run("gmx --version 2>&1 | head -3")
-        gmx_ok = ("GROMACS" in p_check.stdout) or ("2026" in p_check.stdout)
+        def _combined(proc: subprocess.CompletedProcess) -> str:
+            return (proc.stdout or "") + (proc.stderr or "")
+
+        # --- Step 1: 检查 GROMACS 可用性 ---
+        p_check = _run([gmx, "--version"])
+        version_log = _combined(p_check)
+        if p_check.returncode != 0 or "GROMACS" not in version_log.upper():
+            return None
+        version_detected = "unknown"
+        for line in version_log.splitlines():
+            if "GROMACS" in line.upper():
+                version_detected = line.strip()[:160]
+                break
 
         # --- Step 2: TIP3P 溶剂化（gmx solvate）---
         solv_ok = False
         solv_log = ""
         solv_info = {}
         try:
-            p_solv = _run(
-                "gmx solvate -cp init.gro -cs tip3p.gro -o solv.gro -p topol.top 2>&1"
-            )
-            solv_log = p_solv.stdout
+            p_solv = _run([
+                gmx, "solvate", "-cp", "init.gro", "-cs", "tip3p.gro",
+                "-o", "solv.gro", "-p", "topol.top",
+            ])
+            solv_log = _combined(p_solv)
             solv_ok = p_solv.returncode == 0 and "solvent" in solv_log.lower()
-            # 解析溶剂化信息
             for line in solv_log.splitlines():
                 if "Generated solvent containing" in line:
                     solv_info["solvent_atoms"] = line.strip()
@@ -452,33 +468,34 @@ def _run_real_gromacs(
 
         # --- Step 3: 预处理 grompp（用 solv.gro 若成功）---
         cg = "solv.gro" if solv_ok else "init.gro"
-        p_grompp = _run(
-            f"gmx grompp -f em.mdp -c {cg} -p topol.top -o em.tpr -maxwarn 99 2>&1"
-        )
+        p_grompp = _run([
+            gmx, "grompp", "-f", "em.mdp", "-c", cg, "-p", "topol.top",
+            "-o", "em.tpr", "-maxwarn", "99",
+        ])
+        grompp_log = _combined(p_grompp)
         grompp_ok = p_grompp.returncode == 0
 
         # --- Step 4: 短 MD 测试（nsteps=100, 仅测试管道可用）---
         mdrun_ok = False
-        mdrun_log = ""
         try:
-            p_mdrun = _run("gmx mdrun -v -deffnm em -nsteps 100 -ntmpi 1 -ntomp 2 2>&1")
-            mdrun_log = p_mdrun.stdout[-1000:] if p_mdrun.stdout else ""
-            mdrun_ok = p_mdrun.returncode == 0 and "finished" in p_mdrun.stdout.lower()
+            p_mdrun = _run([
+                gmx, "mdrun", "-v", "-deffnm", "em", "-nsteps", "100",
+                "-ntmpi", "1", "-ntomp", "2",
+            ])
+            mdrun_log = _combined(p_mdrun)
+            mdrun_ok = p_mdrun.returncode == 0 and "finished" in mdrun_log.lower()
         except Exception:
             pass
 
-        if not gmx_ok:
-            return None
-
         return {
             "gromacs_available": True,
-            "version_detected": "2026.x",
+            "version_detected": version_detected,
             "water_model": "TIP3P",
             "solvation_success": solv_ok,
             "solvation_info": solv_info,
             "grompp_success": grompp_ok,
             "mdrun_success": mdrun_ok,
-            "grompp_log": p_grompp.stdout[-500:] if p_grompp.stdout else "",
+            "grompp_log": grompp_log[-500:],
             "solvate_log": solv_log[-500:] if solv_log else "",
         }
     except (subprocess.TimeoutExpired, OSError, Exception):

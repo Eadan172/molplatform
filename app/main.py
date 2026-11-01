@@ -11,37 +11,39 @@ MolPlatform - 百万级分子高通量数据架构与自动化处理平台
 """
 
 from fastapi import FastAPI
+import os
+from pathlib import Path
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
 from app.api import molecules, docking, md_simulation, ai_analysis, pipeline
 from app.api import demo as demo_api
 from app.api import demo_page
+from app.api import agent as agent_api
+from app.core.database import init_db, seed_db
+from app.scale.api import router as scale_api_router
+from app.scale.database import init_scale_db
+from app.scale.config import ENVIRONMENT
 
 app = FastAPI(
-    title="MolPlatform — COX-2/1CX2 虚拟筛选 & MD 模拟演示",
+    title="MolPlatform — Natural Language Molecular Workflow MVP",
     description="""
-## 百万级分子数据架构与自动化处理平台
+## MolPlatform Scale MVP (v2)
 
-**核心功能模块：**
-- 🧬 **分子数据管理** — SDF/SMILES 批量导入、结构标准化、聚类分析
-- 🔬 **分子对接** — AutoDock Vina 风格打分、虚拟筛选、批量处理
-- ⚡ **MD 模拟** — Gromacs/Amber 工作流模拟、参数管理
-- 🤖 **AI 分析** — 大模型辅助结果解读、活性预测报告生成
-- 🚀 **全链路管线** — 结构获取 → 对接 → MD → 报告，端到端自动化
+- `/workbench` and `/api/v2`: natural-language task submission, real RDKit descriptors, real AutoDock Vina CLI and real GROMACS `mdrun` workers.
+- PostgreSQL + Redis/Celery distributed tasks; worker nodes must share `MOLPLATFORM_DATA_DIR` and have their own scientific toolchains.
+- MolClaw L1/L2/L3 skill documents are used as workflow guidance and precondition checks. Only installed and verified CLIs are executed.
+- The original `/api/v1` routes are retained for compatibility, but some legacy docking/MD/pipeline implementations are demonstrations. Do not cite their output as real scientific results.
 
-**性能指标（项目实测）：**
-- 数据处理：48h → 6h（并行优化，提升 8×）
-- 虚拟筛选：10⁶+ 分子/天（GPU 加速）
-- 对接精度：RMSD < 2Å，打分相关性 R > 0.7
+This MVP does not claim a measured million-molecule/day throughput. Benchmark on the actual server and GPU before making throughput commitments.
     """,
-    version="1.0.0",
+    version="2.0.0-mvp",
     docs_url="/docs",
     redoc_url="/redoc",
 )
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[x.strip() for x in os.getenv("CORS_ORIGINS", "*").split(",") if x.strip()],
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -53,6 +55,20 @@ app.include_router(ai_analysis.router, prefix="/api/v1/ai", tags=["🤖 AI 分�
 app.include_router(pipeline.router, prefix="/api/v1/pipeline", tags=["🚀 全链路管线"])
 app.include_router(demo_api.router, prefix="/api/v1/demo", tags=["🎯 演示 Demo · COX-2/1CX2"])
 app.include_router(demo_page.router, include_in_schema=False)
+app.include_router(agent_api.router, prefix="/api/v1/agent", tags=["🧠 自然语言分析 MVP"])
+app.include_router(scale_api_router, prefix="/api/v2", tags=["🚀 分布式科研工作流 v2"])
+
+@app.get("/workbench", response_class=HTMLResponse, include_in_schema=False)
+def scale_workbench_page():
+    page = Path(__file__).parent / "scale" / "workbench.html"
+    return HTMLResponse(page.read_text(encoding="utf-8"))
+
+
+@app.on_event("startup")
+def startup_initialize_database():
+    init_db()
+    seed_db()
+    init_scale_db()
 
 
 @app.get("/health", tags=["健康检查"])
@@ -63,18 +79,21 @@ def health():
 @app.get("/api-info", tags=["平台信息"])
 def api_info():
     return {
-        "platform": "MolPlatform v1.0 · 演示版",
+        "platform": "MolPlatform Scale MVP v2 · RDKit/Vina/GROMACS worker + legacy demo APIs",
         "status": "running",
-        "description": "COX-2 (PDB 1CX2) 虚拟筛选 & 100 ns NPT MD 模拟演示",
+        "description": "v2 工作台使用已安装的 RDKit/Vina/GROMACS 命令；v1 中部分对接/MD/管线端点为原型演示，不代表真实计算。",
         "demo_ui": "/demo",
+        "natural_language_mvp": "/api/v1/agent/",
+        "scale_workbench": "/api/v2/",
+        "scale_api": "/api/v2/tasks",
         "docs": "/docs",
         "redoc": "/redoc",
         "modules": [
             "demo      — 一键演示：10 配体 + 1CX2 + MD",
             "molecules — 分子数据管理 & 标准化",
             "docking   — AutoDock Vina 风格对接",
-            "md        — GROMACS 100 ns MD 模拟",
+            "md        — legacy v1: mock trajectory routes; use v2 with a prepared TPR for real GROMACS",
             "ai        — AI 辅助结果分析",
-            "pipeline  — 端到端自动化管线",
+            "pipeline  — legacy v1 demo; v2 task workflows are queue-backed",
         ],
     }

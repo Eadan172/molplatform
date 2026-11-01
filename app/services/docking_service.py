@@ -4,7 +4,7 @@
 
 工作流程：
   1. RDKit 生成 3D 构象 → Meeko 转换为 PDBQT (配体准备)
-  2. AutoDock Vina (D:\anaconda\envs\vina\Library\bin\vina.exe) 执行对接
+  2. AutoDock Vina（环境变量 VINA_BINARY，默认 PATH 上的 vina）执行对接
   3. 解析输出，返回结合能 (kcal/mol) + RMSD
   4. 若真实对接失败，回退到基于分子指纹的打分模型
 """
@@ -20,10 +20,9 @@ from pathlib import Path
 from typing import List, Optional, Dict, Any
 
 # ======================================================================
-# 外部工具路径配置
+# 外部工具路径配置（与 .env.example / app.scale.config 一致）
 # ======================================================================
-VINA_PATH = r"D:\anaconda\envs\vina\Library\bin\vina.exe"
-GMX_WSL_CMD = "wsl -d Ubuntu-24.04 -u root -- bash -lc 'source /usr/local/gromacs/bin/GMXRC && gmx'"
+VINA_BINARY = os.getenv("VINA_BINARY", "vina")
 
 # RDKit + Meeko（用于 PDBQT 制备）
 try:
@@ -173,7 +172,8 @@ def _real_vina_score(
     """调用真实 AutoDock Vina 进行分子对接。
     返回: {'binding_energy': float, 'rmsd_lb': float, 'rmsd_ub': float, 'elapsed': float}
     失败时返回 None。"""
-    if not os.path.exists(VINA_PATH):
+    vina = shutil.which(VINA_BINARY) or (VINA_BINARY if os.path.isfile(VINA_BINARY) else None)
+    if not vina:
         return None
 
     workdir = tempfile.mkdtemp(prefix="vina_")
@@ -202,7 +202,7 @@ def _real_vina_score(
 
         t0 = time.time()
         proc = subprocess.run(
-            [VINA_PATH, "--config", config_txt],
+            [vina, "--config", config_txt],
             capture_output=True, text=True, timeout=timeout,
         )
         elapsed = time.time() - t0

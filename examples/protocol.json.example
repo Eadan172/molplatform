@@ -1,0 +1,11 @@
+{
+  "topology": "topol.top",
+  "coordinates": "conf.gro",
+  "index_file": "index.ndx",
+  "stages": [
+    {"name": "em", "mdp": "em.mdp"},
+    {"name": "nvt", "mdp": "nvt.mdp"},
+    {"name": "npt", "mdp": "npt.mdp"},
+    {"name": "md", "mdp": "md.mdp"}
+  ]
+}
