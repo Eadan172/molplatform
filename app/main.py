@@ -23,6 +23,7 @@ from app.core.database import init_db, seed_db
 from app.scale.api import router as scale_api_router
 from app.scale.database import init_scale_db
 from app.scale.config import ENVIRONMENT
+from app.tamarind.api import router as tamarind_api_router
 
 app = FastAPI(
     title="MolPlatform — Natural Language Molecular Workflow MVP",
@@ -58,6 +59,7 @@ app.include_router(demo_api.router, prefix="/api/v1/demo", tags=["🎯 演示 De
 app.include_router(demo_page.router, include_in_schema=False)
 app.include_router(agent_api.router, prefix="/api/v1/agent", tags=["🧠 自然语言分析 MVP"])
 app.include_router(scale_api_router, prefix="/api/v2", tags=["🚀 分布式科研工作流 v2"])
+app.include_router(tamarind_api_router, prefix="/api/v4", tags=["☁️ Tamarind Bio 云端计算"])
 
 @app.get("/workbench", response_class=HTMLResponse, include_in_schema=False)
 def scale_workbench_page():
@@ -87,6 +89,7 @@ def api_info():
         "natural_language_mvp": "/api/v1/agent/",
         "scale_workbench": "/api/v2/",
         "scale_api": "/api/v2/tasks",
+        "tamarind_api": "/api/v4/tamarind",
         "docs": "/docs",
         "redoc": "/redoc",
         "modules": [
@@ -96,5 +99,6 @@ def api_info():
             "md        — legacy v1: mock trajectory routes; use v2 with a prepared TPR for real GROMACS",
             "ai        — AI 辅助结果分析",
             "pipeline  — legacy v1 demo; v2 task workflows are queue-backed",
+            "tamarind   — optional cloud compute backend; explicit validate-before-submit",
         ],
     }

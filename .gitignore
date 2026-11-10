@@ -68,3 +68,7 @@ logs/
 
 # 临时调试脚本
 _debug*.py
+
+data/tamarind_jobs/
+data/tamarind_upload_staging/
+data/tamarind_results/

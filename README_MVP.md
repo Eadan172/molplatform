@@ -129,3 +129,8 @@ python tests/test_agent_mvp.py
 ```
 
 MVP 测试不需要 Anthropic/OpenAI API Key，也不需要外部 MolClaw MCP 服务。
+
+
+## Tamarind Bio 云端后端（新增）
+
+本次 latest 整合增加可选 Tamarind REST API：`/api/v4/tamarind`。支持发现账户工具、读取 schema、免费参数预验证、上传文件、显式提交云端任务、状态查询、获取结果和下载。未配置 API Key 时不会影响原有本地功能。可从 `/api/v4/tamarind/console` 打开图形控制台；配置项见 `.env.example`，接口文档见 `/docs`。
