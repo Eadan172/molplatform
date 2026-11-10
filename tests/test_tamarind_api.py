@@ -82,8 +82,8 @@ def test_mutated_validation_never_submits(monkeypatch):
 
 def test_console_is_public_but_api_requires_token(monkeypatch):
     monkeypatch.setattr(tamarind_api, "client", FakeClient)
-    monkeypatch.setattr(scale_api, "API_TOKEN", "secret-token")
+    monkeypatch.setattr(scale_api, "API_TOKEN", "test-token")
     with make_client() as c:
         assert c.get("/api/v4/tamarind/console").status_code == 200
         assert c.get("/api/v4/tamarind/health").status_code == 401
-        assert c.get("/api/v4/tamarind/health", headers={"X-API-Token": "secret-token"}).status_code == 200
+        assert c.get("/api/v4/tamarind/health", headers={"X-API-Token": "test-token"}).status_code == 200

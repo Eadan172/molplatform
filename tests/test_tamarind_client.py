@@ -5,13 +5,13 @@ from app.tamarind.client import TamarindClient, TamarindError
 
 
 def make_client(handler):
-    return TamarindClient(api_key='test-key', base_url='https://unit.test/api/', transport=httpx.MockTransport(handler))
+    return TamarindClient(api_key='dummy-key', base_url='https://unit.test/api/', transport=httpx.MockTransport(handler))
 
 
 def test_tools_discovery():
     def handler(req):
         assert req.url.path == '/api/tools'
-        assert req.headers['x-api-key'] == 'test-key'
+        assert req.headers['x-api-key'] == 'dummy-key'
         return httpx.Response(200, json=[{'name':'alphafold','settings':[{'name':'sequence','required':True}]}])
     assert make_client(handler).tools()[0]['name'] == 'alphafold'
 

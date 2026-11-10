@@ -1,180 +1,110 @@
-# MolPlatform — Natural Language Molecular Workflow MVP
+# MolPlatform
 
-> **当前推荐入口：`/workbench` 与 `/api/v2`。** 本代码包新增服务器端异步工作流，RDKit 真实描述符、AutoDock Vina CLI 和 GROMACS `mdrun` 通过独立 worker 调用。
-> 
-> **性能声明：** 本仓库历史演示文档中的“百万分子/天、8×加速、RMSD”等数字没有在本代码包中获得实测验证，不应当作为当前版本的性能或准确性承诺。需要在目标服务器、GPU 和真实科研输入上完成基准测试。
+基于 FastAPI 的分子工作流平台：RDKit 性质分析、AutoDock Vina 对接、GROMACS MD、可选 Tamarind 云端计算，以及网页工作台。
 
-## 先看部署说明
+## 1. 环境要求
 
-新工作流完整部署、服务器队列、WSL 原生工具、文件格式、限制和文献步骤测试说明请先阅读 [`README_SCALE_MVP.md`](README_SCALE_MVP.md)。
+- Linux / WSL（推荐）或 Windows
+- Python 3.11 / 3.12
+- Docker Compose（PostgreSQL + Redis）
+- RDKit、AutoDock Vina、GROMACS
+- 使用 SMILES 对接时需要 Open Babel
+- 可选：NVIDIA GPU + GROMACS GPU build
 
-- 浏览器工作台：`http://<服务器IP>:8000/workbench`
-- API 文档：`http://<服务器IP>:8000/docs`
-- v2 提交接口：`POST /api/v2/tasks`
-
-旧 `/api/v1` 接口保留向后兼容，但部分 docking、MD 与 pipeline 服务来自早期演示原型，其输出不应当当作真实科学计算结果。
-
-## 技术架构
-
-```
-MolPlatform/
-├── app/
-│   ├── main.py                   # FastAPI 应用入口
-│   ├── api/
-│   │   ├── molecules.py          # 分子管理 API（批量导入/聚类/标准化）
-│   │   ├── docking.py            # 分子对接 API（AutoDock Vina 风格）
-│   │   ├── md_simulation.py      # MD 模拟 API（Gromacs/Amber 工作流）
-│   │   ├── ai_analysis.py        # AI 分析 API（Claude LLM 集成）
-│   │   └── pipeline.py           # 全链路管线 API（端到端自动化）
-│   ├── core/
-│   │   └── database.py           # SQLite 模型 + 测试数据种子
-│   └── services/
-│       ├── molecule_service.py   # 并行处理 / Butina 聚类
-│       ├── docking_service.py    # 对接打分 / 虚拟筛选
-│       ├── md_service.py         # MD 参数 / 轨迹分析
-│       └── ai_service.py         # Anthropic Claude API 调用
-├── tests/
-│   └── test_api.py               # 自动化测试
-├── requirements.txt
-└── README.md
-```
-
----
-
-## MoleCode 结构层
-
-[MoleCode](https://github.com/AtomFlow-AI/MoleCode)（`molecode`，MIT）是 agent / AI 路径上的结构表示层，不替换对接、MD、HTVS 或 Scale worker。
-
-- Python：`app/services/molecode_service.py` 提供 `smiles_to_mermaid`、`mermaid_to_mol`、`mermaid_to_smiles`。无效图会抛出 `MoleCodeStructureError`（未知原子、悬空键、RDKit 价态失败）。
-- Agent 工具：`POST /api/v1/agent/tools/molecode`，动作 `smiles_to_mermaid`、`mermaid_to_smiles`、`validate`。自然语言里出现 MoleCode / Mermaid / 结构图时，`/api/v1/agent/tasks` 会调用同一工具。
-- 对话：`POST /api/v1/ai/chat` 在上下文带有 `smiles` 或 MoleCode 图时，会先做 RDKit 校验，再把结果交给模型。
-- 转换本身不需要 LLM。若要用 `molecode.llm` 做可选的图编辑，沿用 `.env` 里的 `LLM_PROVIDER`、`LLM_BASE_URL`、`LLM_API_KEY`、`LLM_MODEL`（`LLM_PROVIDER=none` 时不创建客户端）。不要把真实密钥写入仓库。说明见 `integrations/molecode/SKILL.md`。
-
-## 快速启动
+## 2. 安装
 
 ```bash
-# 1. 安装依赖
+git clone <repository-url>
+cd molplatform
+python3.11 -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
 pip install -r requirements.txt
-
-# 2. 启动服务
-uvicorn app.main:app --reload --port 8000
-
-# 3. 打开文档
-open http://localhost:8000/docs
+cp .env.example .env
 ```
 
----
+编辑 `.env`：
 
-## API 模块说明
+- `POSTGRES_PASSWORD` 与 `DATABASE_URL` 中的密码保持一致；
+- `API_TOKEN` 设置为足够长的随机字符串；
+- 如果 Vina / Open Babel / GROMACS 不在 PATH，设置 `VINA_BINARY`、`OBABEL_BINARY`、`GROMACS_BINARY`；
+- 使用 Tamarind 时填写 `TAMARIND_API_KEY`，密钥只保存在服务端。
 
-### 🧬 分子管理 `/api/v1/molecules`
+不要提交 `.env`。
 
-| 接口 | 说明 |
-|------|------|
-| `GET /` | 列表查询（支持聚类过滤、Ro5 过滤） |
-| `POST /` | 新增单个分子（SMILES 验证 + 标准化） |
-| `POST /batch` | **并行批量导入**（对应简历：48h→6h 优化） |
-| `POST /validate` | SMILES 合法性验证 |
-| `GET /stats/summary` | 分子库统计（Ro5 通过率、聚类数） |
+## 3. 启动
 
-批量导入示例：
-```json
-POST /api/v1/molecules/batch
-{
-  "molecules": [
-    {"name": "Compound-1", "smiles": "CC(=O)Oc1ccccc1C(=O)O"},
-    {"name": "Compound-2", "smiles": "CC(C)Cc1ccc(cc1)C(C)C(=O)O"}
-  ],
-  "n_workers": 4,
-  "cluster": true
-}
+```bash
+./scripts/start_infra.sh   # 启动 PostgreSQL 和 Redis
+./scripts/toolcheck.sh     # 检查 RDKit / Vina / GROMACS / Redis / Postgres
 ```
 
-### 🔬 分子对接 `/api/v1/docking`
+分别启动 API 和 worker：
 
-对应 PPT：AutoDock Vina + COX-2 (1CX2) 虚拟筛选案例
-
-| 接口 | 说明 |
-|------|------|
-| `POST /jobs` | 提交对接任务（含 exhaustiveness、CPU 核数） |
-| `GET /jobs/{id}` | 任务详情 + 结果分析 |
-| `POST /screen` | **大规模虚拟筛选**（模拟 10⁶ 分子/天） |
-| `GET /results/{id}/top` | Top 命中（可设活性阈值） |
-| `GET /receptors` | 支持靶标列表（COX-2、DJ-1） |
-
-### ⚡ MD 模拟 `/api/v1/md`
-
-对应 PPT：Gromacs/Amber 工作流，100ns NPT 模拟
-
-| 接口 | 说明 |
-|------|------|
-| `POST /jobs` | 提交 MD 任务（力场/水模型/GPU 配置） |
-| `GET /jobs/{id}/trajectory` | RMSD 时间序列 |
-| `GET /jobs/{id}/rmsf` | RMSF 残基柔性 + 氢键分析 |
-| `GET /estimate` | 计算时间估算（CPU vs GPU） |
-| `GET /forcefields` | 支持的力场列表 |
-
-### 🤖 AI 分析 `/api/v1/ai`
-
-集成 Claude (claude-sonnet-4-6) 进行专业分析：
-
-| 接口 | 说明 |
-|------|------|
-| `POST /analyze/docking/{id}` | AI 解读对接结果 |
-| `POST /analyze/md/{id}` | AI 解读 MD 轨迹 |
-| `POST /report/lead-opt` | 先导化合物优化报告 |
-| `POST /chat` | 计算化学专家对话（支持携带项目上下文） |
-
-### 🚀 全链路管线 `/api/v1/pipeline`
-
-端到端自动化，对应简历：「从结构获取到报告生成」全链路闭环
-
-```
-Stage 1: 分子数据加载 & 标准化
-Stage 2: AutoDock Vina 虚拟筛选
-Stage 3: Top-hit MD 模拟验证（100ns）
-Stage 4: AI 分析报告生成
+```bash
+./scripts/run_api.sh        # API
+./scripts/run_worker.sh     # CPU / RDKit / Vina worker
+./scripts/run_md_worker.sh  # GPU / GROMACS worker
 ```
 
-提交全链路任务：
-```json
-POST /api/v1/pipeline/submit
-{
-  "name": "COX2-Campaign-001",
-  "receptor": "1CX2",
-  "docking_exhaustiveness": 32,
-  "energy_threshold": -7.5,
-  "run_md": true,
-  "md_sim_time_ns": 100,
-  "generate_ai_report": true
-}
+访问 `http://localhost:8000/workbench`，API 文档位于 `http://localhost:8000/docs`。远程部署时将 `localhost` 替换为服务器地址。
+
+## 4. 使用流程
+
+### 4.1 网页工作台
+
+1. 打开 `/workbench`，输入 `.env` 中的 `API_TOKEN`。
+2. 上传分子库（CSV / SMI / TXT / SDF）或结构文件（PDBQT / TPR / ZIP）。
+3. 输入自然语言需求，例如：
+   - `计算分子库的 RDKit 性质，筛选 Ro5 通过且分子量小于 500 的候选物。`
+   - `使用给定的受体和对接盒运行 Vina 对接，输出排名。`
+   - `运行准备好的 GROMACS TPR，并归档轨迹和日志。`
+4. 提交后查看任务状态、步骤日志、JSON 报告、CSV 结果和 ZIP 工件。
+
+### 4.2 API
+
+```bash
+# 上传文件
+curl -X POST http://localhost:8000/api/v2/assets \
+  -H "X-API-Token: $API_TOKEN" \
+  -F "file=@examples/mini_library.csv"
+
+# 提交任务
+curl -X POST http://localhost:8000/api/v2/tasks \
+  -H "Content-Type: application/json" \
+  -H "X-API-Token: $API_TOKEN" \
+  -d '{"prompt":"计算 RDKit 性质并筛选 Ro5 通过的分子","asset_ids":["<asset-id>"]}'
+
+# 查询任务、报告和工件
+curl -H "X-API-Token: $API_TOKEN" http://localhost:8000/api/v2/tasks/<task-id>
+curl -H "X-API-Token: $API_TOKEN" http://localhost:8000/api/v2/tasks/<task-id>/report
+curl -H "X-API-Token: $API_TOKEN" http://localhost:8000/api/v2/tasks/<task-id>/artifacts
 ```
 
----
+### 4.3 输入格式
 
-## 测试数据
+- 性质分析：CSV 至少包含 `smiles` 列，可选 `name`；也支持 SMI / TXT / SDF。
+- Vina 对接：预处理后的受体 `.pdbqt`；配体使用 CSV / SMI（SMILES）或预制 `.pdbqt`；必须提供 `center_x/y/z` 和 box 尺寸。
+- GROMACS MD：上传已准备好的 `.tpr`，或包含拓扑、坐标、`.mdp` 和 `protocol.json` 的 ZIP。`protocol.json` 示例见 `examples/protocol.json.example`。
 
-内置 10 个分子（自动种子）：
+### 4.4 Tamarind 云端计算（可选）
 
-| 分子 | 用途 | 聚类 |
-|------|------|------|
-| Celecoxib | COX-2 抑制剂（已上市） | 1 |
-| Ibuprofen / Naproxen | NSAIDs | 2 |
-| Aspirin | 非选择性 COX | 3 |
-| Diclofenac / Indomethacin | COX-2 抑制剂 | 1 |
-| DJ1-Cov-001/002 | DJ-1 共价抑制剂候选 | 4 |
-| Kinase-Lead-A/B | 激酶选择性优化候选 | 5 |
+1. 在 `.env` 中设置 `TAMARIND_API_BASE` 和 `TAMARIND_API_KEY`。
+2. 打开 `/api/v4/tamarind/console`。
+3. 依次执行：检查连接 → 刷新工具目录 → 选择工具 → 读取 Schema → 填写参数 → 仅验证 → 确认后提交 → 查询状态 → 下载结果。
+4. 未配置 API Key 时不影响本地功能；提交真实云端任务可能产生费用。
 
----
+## 5. 测试
 
-## 生产环境扩展
+```bash
+pip install -r requirements-dev.txt
+python -m pytest -q
+```
 
-| 模块 | Demo | 生产替换 |
-|------|------|----------|
-| 分子处理 | 自实现估算 | **RDKit** |
-| 分子对接 | 模拟打分 | **AutoDock Vina / Smina / GNINA** |
-| MD 模拟 | 轨迹生成 | **Gromacs / Amber + SLURM** |
-| 任务队列 | 同步执行 | **Celery + Redis** |
-| 数据库 | SQLite | **PostgreSQL** |
-| 存储 | 本地 | **分布式对象存储（MinIO/OSS）** |
-| LLM | Claude API | Claude / GPT-4 / 本地 LLM |
+## 6. 注意事项
+
+- `/api/v2` 仅在外部命令成功且生成结果文件时报告成功。
+- `/api/v1` 中的 docking、MD、pipeline 包含演示实现，不应作为真实科研结果引用。
+- 多 worker 部署时，所有节点必须挂载相同的 `MOLPLATFORM_DATA_DIR`。
+- 公网部署请使用 HTTPS、强 `API_TOKEN`、防火墙和访问控制，不要直接暴露开发端口。
+- 不要提交 `.env`、数据库、轨迹、结构文件或其他运行产物。
