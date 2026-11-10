@@ -15,7 +15,7 @@ UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 JOBS_DIR.mkdir(parents=True, exist_ok=True)
 
 DATABASE_URL = os.getenv("DATABASE_URL", f"sqlite:///{(DATA_DIR / 'scale.db').as_posix()}")
-REDIS_URL = os.getenv("REDIS_URL", "redis://127.0.0.1:6379/0")
+REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
 API_TOKEN = os.getenv("API_TOKEN", "")
 ENVIRONMENT = os.getenv("ENVIRONMENT", "development").lower()
 CORS_ORIGINS = os.getenv("CORS_ORIGINS", "*")

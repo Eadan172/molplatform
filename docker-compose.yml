@@ -1,5 +1,6 @@
 # Infrastructure for a native WSL/Linux API + scientific workers.
-# Keep Postgres and Redis private to the host; expose the web API separately behind HTTPS.
+# Keep Postgres and Redis private to the host; Docker requires an IP literal for port binding.
+# Expose the web API separately behind HTTPS.
 services:
   postgres:
     image: postgres:16-alpine
